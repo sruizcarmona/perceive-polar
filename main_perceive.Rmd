@@ -1,0 +1,115 @@
+---
+title: "PERCEIVE POLAR"
+output:
+  html_notebook:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    theme: cosmo
+    df_print: paged
+    highlight: tango
+    code_folding: hide
+---
+
+<script>
+$(document).ready(function() {
+  $items = $('div#TOC li');
+  $items.each(function(idx) {
+    num_ul = $(this).parentsUntil('#TOC').length;
+    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
+  });
+
+});
+</script>
+
+***
+
+Load libraries for reading fit data and create maps and plots.
+
+```{r warning=FALSE, results='hide', echo=F}
+# library(fit)
+# library(ggplot2)
+# library(leaflet)
+# library(dplyr)
+# library(cetcolor)
+# library(XML)
+# library(tidyr)
+# library(geosphere)
+# library(zoo)
+# library(RColorBrewer)
+library(dplyr)
+library(stringr)
+library(xml2)
+```
+
+Load functions
+
+```{r}
+smooth.data <- function(data,w){
+  sm <- rollapply(data,width=w,function(...) {mean(...,na.rm=T)},partial=T,align="center")
+  return(round(sm,2))
+}
+```
+
+
+Get files from zip
+
+```{r}
+myfiles <- unzip("participants.zip", list = TRUE) %>% 
+  filter(Length > 0, !str_detect(Name, "__MACOSX")) %>% 
+  arrange(Name) %>% 
+  pull(Name)
+```
+
+
+Read files from zip
+
+```{r}
+file <- unz("participants.zip", myfiles[1])
+# doc <- read_xml(file)
+file
+```
+
+
+```{r}
+# myfile <- 'participants/TST_001/Sergio_Ruiz_2024-01-01_18-13-46.TCX'
+# file <- read_xml(myfile)
+```
+
+Process TCX
+
+```{r}
+source('src/readTCX.R')
+```
+
+```{r}
+act <- readTCX(file)
+act
+```
+
+Fix time by timezone
+
+```{r}
+#get timezone from lat lon
+library(lutz)
+library(lubridate)
+tz <- ifelse(is.na(tz_lookup_coords(act$LatitudeDegrees[1],act$LongitudeDegrees[1], method = "fast", warn = F)),
+             "Australia/Melbourne",
+             tz_lookup_coords(act$LatitudeDegrees[1],act$LongitudeDegrees[1], method = "fast", warn = F)) 
+
+act <- act %>% 
+  mutate(Time = ymd_hms(Time, tz=tz, quiet = T))
+
+act
+```
+
+Process activity
+
+```{r}
+
+```
+
+
+
