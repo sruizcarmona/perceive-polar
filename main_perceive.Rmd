@@ -35,7 +35,7 @@ Load libraries for reading fit data and create maps and plots.
 # library(dplyr)
 # library(cetcolor)
 # library(XML)
-# library(tidyr)
+library(tidyr)
 # library(geosphere)
 # library(zoo)
 # library(RColorBrewer)
@@ -85,8 +85,8 @@ source('src/readTCX.R')
 ```
 
 ```{r}
-act <- readTCX(file)
-act
+fdata <- readTCX(file)
+fdata
 ```
 
 Fix time by timezone
@@ -95,21 +95,514 @@ Fix time by timezone
 #get timezone from lat lon
 library(lutz)
 library(lubridate)
-tz <- ifelse(is.na(tz_lookup_coords(act$LatitudeDegrees[1],act$LongitudeDegrees[1], method = "fast", warn = F)),
-             "Australia/Melbourne",
-             tz_lookup_coords(act$LatitudeDegrees[1],act$LongitudeDegrees[1], method = "fast", warn = F)) 
+# tz <- ifelse(is.na(tz_lookup_coords(fdata$LatitudeDegrees[1],fdata$LongitudeDegrees[1], method = "fast", warn = F)),
+#              "Australia/Melbourne",
+#              tz_lookup_coords(fdata$LatitudeDegrees[1],fdata$LongitudeDegrees[1], method = "fast", warn = F)) 
+tz <- replace_na(tz_lookup_coords(na.omit(fdata$LatitudeDegree)[1], na.omit(fdata$LongitudeDegrees)[1], method = "fast", warn = F), 
+                 'Australia/Melbourne')
 
-act <- act %>% 
+fdata <- fdata %>% 
   mutate(Time = ymd_hms(Time, tz=tz, quiet = T))
 
-act
+fdata
 ```
+
 
 Process activity
 
 ```{r}
+fdata <- fdata %>%
+  # slice_head(n=5) %>%
+  plyr::rename(replace=c(AltitudeMeters="altitude",
+                         HeartRateBpm="heart_rate",
+                         Time="datetime",
+                         DistanceMeters="distance",
+                         Cadence="cadence",
+                         LatitudeDegrees="lat",
+                         LongitudeDegrees="lon",
+                         Watts="power",
+                         SensorState = "sensor"
+  ),
+  warn_missing=FALSE) %>%
+  # select(time, one_of("lat", "lon", "altitude", "power", "sensor", "distance", "heart_rate")) %>%
+  select(datetime, one_of("lat", "lon", "distance", "heart_rate")) %>%
+  # 'heart_rate' column, if it exists, is always numeric, and the pipeline continues without errors if the column does not exist
+  mutate_at(if('heart_rate' %in% names(.)) 'heart_rate' else integer(0), as.numeric) %>%
+  mutate(
+    day=format(as.POSIXct(datetime),"%y%m%d"),
+    timeofday=format(as.POSIXct(datetime),"%H:%M:%S"))
+fdata 
+```
+
+Calculate etrimp
+
+```{r}
+# source('src/f_getactivityinfo.R')
+############################################################################################################
+## SINGLE ROW DF (REPETITIVE CALL)
+## return a df of 1 row and colnames for error activities
+############################################################################################################
+onerow.df <- function(values,colnames){
+  return(setNames(data.frame(matrix(values, ncol=length(colnames), nrow=1),stringsAsFactors = FALSE), colnames))
+}
+```
+
+```{r}
+maxhr <- 200
+ath <- 'TST_001'
+zipfile <- 'participants.zip'
+```
+
+```{r}
+############################################################################################################
+## GET FILES FOR ATHLETE 
+## given an athlete name, look for all the files and return list
+###
+## input athlete name
+## output dlist of files
+############################################################################################################
+
+get_list_files <- function(id, zipfile) {
+  files_in_zip <- unzip(zipfile, list = TRUE) %>% 
+    filter(Length > 0, !str_detect(Name, "__MACOSX")) %>% 
+    arrange(Name) %>% 
+    pull(Name)
+  ath_files <- files_in_zip[str_detect(files_in_zip, paste0(id))]
+  return(ath_files)
+}
+```
+
+
+```{r}
+############################################################################################################
+## MAIN FUNCTION 
+## extract heart rate, power and speed from a file
+###
+## input filename and maxHR
+## output dataframe with hr,power, speed and correlations in columns
+############################################################################################################
+  
+get_act_info_from_polar <- function(polar, maxhr) {
+  ####
+  #process
+  ####
+  # get timezone from lat lon and correct times
+  tz <- try(replace_na(tz_lookup_coords(na.omit(polar$LatitudeDegree)[1], na.omit(polar$LongitudeDegrees)[1], method = "fast", warn = F), 
+                   'Australia/Melbourne'), silent = T)
+  if (class(tz) == "try-error"){ tz <- 'Australia/Melbourne'}
+
+  polar <- polar %>% 
+    mutate(Time = ymd_hms(Time, tz=tz, quiet = T))
+  
+  #other checks and name changes for consistency
+  polar <- polar %>%
+    plyr::rename(replace=c(AltitudeMeters="altitude",
+                           HeartRateBpm="heart_rate",
+                           Time="datetime",
+                           DistanceMeters="distance",
+                           Cadence="cadence",
+                           LatitudeDegrees="lat",
+                           LongitudeDegrees="lon",
+                           Watts="power",
+                           SensorState = "sensor"
+    ),
+    warn_missing=FALSE) %>%
+    # select(time, one_of("lat", "lon", "altitude", "power", "sensor", "distance", "heart_rate")) %>%
+    select(datetime, one_of("lat", "lon", "distance", "heart_rate")) %>%
+    # 'heart_rate' column, if it exists, is always numeric, and the pipeline continues without errors if the column does not exist
+    mutate_at(if('heart_rate' %in% names(.)) 'heart_rate' else integer(0), as.numeric) %>%
+    mutate(
+      day=format(as.POSIXct(datetime),"%y%m%d"),
+      timeofday=format(as.POSIXct(datetime),"%H:%M:%S"))
+  
+  ###################
+  # initialize activity (a) summary
+  ###################
+  start_time <- polar$datetime[1]
+  start_date <- as_date(start_time)
+  a <- onerow.df(format(start_date,"%Y%m%d"),"datenum")
+  a$date <- start_date
+  a$year <- format(start_date,"%Y")
+  a$month <- format(start_date,"%m")
+  a$week <- format(start_date,"%W")
+  a$start_time <- as.character(format(start_time,"%H:%M"))
+  a$duration_min <- round(as.numeric(difftime(last(polar$datetime),first(polar$datetime), units="mins")), 2)
+  a$total_dist_km <- round(last(polar$distance)/1000,2)
+  # add info about device (brand and product code and name)
+  a$device_model_name <- ifelse(!is.null(attributes(polar)$device_model_name),
+                                attributes(polar)$device_model_name,
+                                "unknown")
+  # sport info
+  a$sport <- ifelse(!is.null(attributes(polar)$sport),
+                           attributes(polar)$sport,
+                           NA)
+  # heart stuff
+  a$maxhr_participant <- maxhr
+  ###################
+  # remove first and last 10 seconds, to reduce risk of peaks in sensor pairing, gps or other stuff
+  # fd <- polar$record[11:(dim(polar$record)[1]-10),]
+  # comment above, as it is not needed for perceive
+  hr <- polar %>% select(heart_rate)
+  rownames(hr) <- NULL
+  
+  ###################
+  # get info from heart_rate
+  # check that heart_rate is present in polar and its above 10%, otherwise return NA
+  if ("heart_rate" %in% names(hr) & sum(!is.na(hr))/length(hr) > 0.1 & sum(hr != 0, na.rm=T)/length(hr) > 0.1){
+  # if (sum(!is.na(hr))/length(hr) > 0.1 & sum(hr != 0, na.rm=T)/length(hr) > 0.1){
+    # if, after that, the first 20 values are above 180, clean them too, as they are probably artifacts
+    # if(any(hr[1:20] > 180, na.rm = T)){
+    #   hr[1:20] <- NA
+    # }
+    ## comment above for perceive
+    # clean hr=0, as sometimes the sensor fails
+    hr$heart_rate[hr$heart_rate == 0] <- NA
+    # smooth hr
+    # hr above maxHR reduce to maxHR as it has already been processed when getting the zones (heavier smooth)
+    # smooth.hr <- smooth.data(hr,10)
+    # smooth.hr[smooth.hr=="NaN"] <- NA
+    ## PERCEIVE no smooth for now
+    # smooth.hr[smooth.hr > ath.maxHR] <- ath.maxHR
+    # process all from smooth.hr
+    a$maxhr_activity <- round(max(hr$heart_rate, na.rm=T),0)
+    a$maxhr_perc <- round(a$maxhr_activity/a$maxhr_participant*100,1)
+    a$maxhr_intensity <- round(a$maxhr_perc * a$duration_min,1)
+    a$hr_avg <- round(mean(hr$heart_rate,na.rm=T),0)
+    # get hr_zones and times (standard %s)
+    hr_zones <- quantile(c(0:a$maxhr_participant),probs=seq(0,1,by=0.1))
+    hr$hr_zones <- findInterval(hr$heart_rate,hr_zones[6:10])
+    hr_zones_table <- round(table(hr$hr_zones)/length(hr$hr_zones)*100,2)
+    hr_zones_table[c("0","1","2","3","4","5")[!c("0","1","2","3","4","5") %in% names(hr_zones_table)]] <- 0
+    a$hr_z0 <- as.numeric(hr_zones_table['0'])
+    a$hr_z1 <- as.numeric(hr_zones_table['1'])
+    a$hr_z2 <- as.numeric(hr_zones_table['2'])
+    a$hr_z3 <- as.numeric(hr_zones_table['3'])
+    a$hr_z4 <- as.numeric(hr_zones_table['4'])
+    a$hr_z5 <- as.numeric(hr_zones_table['5'])
+    a$hr_z0_time <- as.numeric(round(a$hr_z0/100 * a$duration_min,1))
+    a$hr_z1_time <- as.numeric(round(a$hr_z1/100 * a$duration_min,1))
+    a$hr_z2_time <- as.numeric(round(a$hr_z2/100 * a$duration_min,1))
+    a$hr_z3_time <- as.numeric(round(a$hr_z3/100 * a$duration_min,1))
+    a$hr_z4_time <- as.numeric(round(a$hr_z4/100 * a$duration_min,1))
+    a$hr_z5_time <- as.numeric(round(a$hr_z5/100 * a$duration_min,1))
+    # calculate trimp scores
+    a$etrimp <- round(a$hr_z1_time * 1 + a$hr_z2_time * 2 + a$hr_z3_time * 3 + a$hr_z4_time * 4 + a$hr_z5_time * 5,2)
+  } else {
+    # add same columns with NA
+      a <- cbind(a, onerow.df(NA,colnames=c("maxhr_activity","maxhr_perc","maxhr_intensity","hr_avg",
+                                            "hr_z0","hr_z1", "hr_z2","hr_z3","hr_z4","hr_z5",
+                                            "hr_z0_time", "hr_z1_time","hr_z2_time","hr_z3_time","hr_z4_time","hr_z5_time",
+                                            "etrimp")))
+    }
+
+  return(a)
+}
+
+############################################################################################################
+## WRAPPER FUNCTION 
+## check for errors in file and activity
+## process file
+###
+## input filename and ath.id
+## output activity info
+############################################################################################################
+```
+
+
+```{r}
+process_polarfile <- function(zipfile, filename, ath, maxhr) {
+  # read file and create polar
+  polar_file <- unz(zipfile, filename)
+  polar <- readTCX(polar_file)
+
+
+  ###################
+  # check errors in file or before processing the activity
+  # skip files with errors
+  if (class(polar) == "try-error"){
+    act.err <- onerow.df(c(ath,rep('file error (reading)', length(act.err.names)-2),file), act.err.names)
+    return(act.err)
+  }
+  
+  # discard if there are no records or it's shorter than a minute
+  if (is.null(dim(polar)) || dim(polar)[1] < 60) {
+    act.err <- onerow.df(c(ath,rep('activity error (short/no data)',length(act.err.names)-2),file), act.err.names)
+    return(act.err)
+  }
+  
+  # discard if activity contains more than 1 row
+  # if(length(polar$session$sport) > 1 | length(polar$sport$sport) > 1) {
+  #   act.err <- onerow.df(c(ath.id,rep('activity error (multiple sports/rows)',length(act.err.names)-2),file), act.err.names)
+  #   return(act.err)
+  # }
+  # PERCEIVE comment
+  
+  ###################
+  # process activity
+  ###################
+  act <- try(get_act_info_from_polar(polar, maxhr), silent=T)
+  # print(act) #debug
+  ###################
+  # check errors in activity
+  # skip files with errors in processing activity
+  if (class(act) == "try-error"){
+    act.err <- onerow.df(c(ath,rep('activity error (unknown)',length(act.err.names)-2),file), act.err.names)
+    return(act.err)
+  }
+  # act hr higher than maxhr
+  if(!is.na(act$maxhr_activity) & act$maxhr_activity > act$maxhr_participant) {
+    act.err <- onerow.df(c(ath,rep('activity error (maxHR too high)',length(act.err.names)-2),file),act.err.names)
+    return(act.err)
+  }
+  # timestamp missing
+  if(is.na(act$date)) {
+    act.err <- onerow.df(c(ath,rep('activity error (missing timestamp)',length(act.err.names)-2),file),act.err.names)
+    return(act.err)
+  }
+  # wrong year (in the future), hard to find an auto fix and only 1 or 2 examples
+  if (act$year > as.numeric(format(as.Date(Sys.Date()),"%Y"))) {
+    act.err <- onerow.df(c(ath,rep('activity error (wrong year)',length(act.err.names)-2),file), act.err.names)
+    return(act.err)
+  }
+  ###################
+  # save activity
+  ###################
+  # update session to be counted and add the info to results df
+  act.info <- cbind(ath, act, file=file)
+  return(act.info)
+}
+
+############################################################################################################
+############################################################################################################
+############################################################################################################
+
 
 ```
 
+
+Run the whole process
+
+read the participants ids and maxhr from csv and run the process for each file
+
+```{r}
+# read athletes and maxhr
+input <- read.csv("input.csv", header=T, stringsAsFactors = F)
+```
+
+```{r}
+act.err.names <- c("ath","datenum","date","year","month","week","start_time","duration_min","total_dist_km","device_model_name","sport",
+                   "maxhr_participant","maxhr_activity","maxhr_perc","maxhr_intensity","hr_avg",
+                   "hr_z0","hr_z1","hr_z2","hr_z3","hr_z4","hr_z5",
+                   "hr_z0_time","hr_z1_time","hr_z2_time","hr_z3_time","hr_z4_time","hr_z5_time","etrimp","file")
+```
+
+
+```{r}
+perceive_all <- NULL
+for (i in 1:nrow(input)) {
+  # read athlete and maxhr
+  id <- input$ID[i]
+  maxhr <- input$MAXHR[i]
+  # read files
+  files <- get_list_files(id = id, zipfile = zipfile)
+  for (file in files) {
+    # read zip file
+    polar_file <- process_polarfile(filename = file, zipfile = zipfile, ath = id, maxhr = maxhr)
+    perceive_all <- rbind(perceive_all, polar_file)
+  }
+}
+```
+
+```{r}
+perceive_all
+```
+
+
+## Step 3
+
+### SUMMARIZE STUFF
+
+split training.all into correct sessions, duplicate and error
+
+```{r}
+# levels(training.all$file) <- c(levels(training.all$file),"PRO_HEART/AUS_PH/BENTLEYOLDEN/FULL_2YEARS/kk.fit","PRO_HEART/AUS_PH/BENTLEYOLDEN/MONTH_2YEARS/2018-09-28-203213-ELEMNT 3AE9-91-0.fit")
+# training.all[8,]$file <- "PRO_HEART/AUS_PH/BENTLEYOLDEN/FULL_2YEARS/kk.fit"
+# training.all[7,]$file <- "PRO_HEART/AUS_PH/BENTLEYOLDEN/MONTH_2YEARS/2018-09-28-203213-ELEMNT 3AE9-91-0.fit"
+error.sessions <- perceive_all %>% filter(str_detect(date,"error")) %>% select(ath,file,reason=date)
+# check if file has already been processed in a different folder (some cases with full/monthly divisions)
+# dup.sessions <- tpeaks.all %>%
+#   filter(!str_detect(date,"error")) %>% 
+#   mutate(filename=sapply(str_split(file,"/"),function(x) last(x))) %>%
+#   group_by(ath.id,filename) %>%
+#   mutate(id=row_number(),source=first(file)) %>%
+#   ungroup() %>%
+#   mutate_if(is.factor, as.character) %>%
+#   filter(id >1) %>%
+#   mutate(reason="duplicated file") %>%
+#   select(ath.id,file,source,reason)
+
+# update all.activities
+all.activities <- perceive_all %>%
+  filter(!str_detect(date,"error")) %>% 
+  mutate(filename=sapply(str_split(file,"/"),function(x) last(x))) %>%
+  # group_by(ath.id,filename) %>%
+  # mutate(id=row_number(),source=first(file)) %>%
+  # ungroup() %>%
+  mutate_if(is.factor, as.character) %>%
+  # filter(id == 1) %>% 
+  select(-filename)
+
+# clean columns, so they all have the correct type (numbers are not chars)
+all.activities <- type.convert(all.activities, as.is=T)
+
+# get duplicated activities based on time, etc
+dup.sessions <- all.activities %>%
+                        group_by(ath, date, start_time) %>% 
+                        # mutate device_brand_id so 0s are 9999 and do not interfere with sorting in next step
+                        # mutate(device_brand_id = ifelse(device_brand_id == 0, 9999, device_brand_id)) %>% 
+                        # arrange by device_brand_id (so garmin would always be higher)
+                        # arrange(device_brand_id, -total_dist.km, .by_group=T) %>%
+                        # arrange(-total_dist.km, .by_group=T) %>%
+                        mutate(id=row_number(),source=first(file)) %>%
+                        ungroup() %>%
+                        mutate_if(is.factor, as.character) %>%
+                        filter(id > 1) %>%
+                        mutate(reason="repeated activity") %>%
+                        select(ath, file, source, reason)
+
+# unique activities
+all.activities <- all.activities %>%
+  group_by(ath, date, start_time) %>%
+  # mutate device_brand_id so 0s are 9999 and do not interfere with sorting in next step
+  # arrange by device_brand_id (so garmin would always be higher)
+  # arrange(-total_dist.km, .by_group=T) %>%% 
+  mutate(id=row_number(), source=first(file)) %>%
+  ungroup() %>%
+  mutate_if(is.factor, as.character) %>%
+  filter(id == 1) %>% 
+  select(-source, -id)
+
+# split z01 into z0 and z1 and all the respective times
+all.activities <- all.activities %>% 
+  mutate(hr_zones.total_time = hr_z0_time + hr_z1_time + hr_z2_time + hr_z3_time + hr_z4_time + hr_z5_time,
+         hr_zones.total.perc = hr_z0 + hr_z1 + hr_z2 + hr_z3 + hr_z4 + hr_z5) %>% 
+  # relocate(any_of(c("hr_z0","hr_z1")), .after = hr_z01) %>% 
+  # relocate(any_of(c("hr_z01_time", "hr_z0_time")), .before = hr_z1_time) %>% 
+  relocate(hr_zones.total_time, .after = hr_z5_time) %>%
+  relocate(hr_zones.total.perc, .after = hr_z5)
+```
+
+populate ath.info
+
+```{r}
+ath.info <- all.activities %>%
+  mutate(folder=tolower(sapply(str_split(file,"/"),function(x) x[4]))) %>%
+  group_by(ath) %>%
+  summarise(total_activities=n(), 
+            n_cycling=sum(sport =="Cycling", na.rm = T),
+            n_running=sum(sport =="Running", na.rm = T),
+            n_other=sum(!grepl("Running|Cycling",sport )),
+            n_heart=sum(!is.na(hr_avg)),
+           ) %>% 
+            # n_power=sum(!is.na(power.avg)),
+            # n_heart_power=sum(!is.na(power.avg) & !is.na(hrmax.activity))
+  mutate(perc_heart=round(n_heart/total_activities*100,1),
+         
+         #        perc_power = round(n_power/total_activities*100,1),
+         #        perc_heart_power = round(n_heart_power/total_activities*100,1)
+  ) %>% 
+  arrange(ath)
+
+# add error and duplicate count
+for (i in ath.info$ath) {
+  ath.info[ath.info$ath==i,'n_error'] <- sum(!is.na(str_extract(error.sessions$file,i)))
+  ath.info[ath.info$ath==i,'n_duplicates'] <- sum(!is.na(str_extract(dup.sessions$file,i)))
+}
+# add year count
+year.info <- all.activities %>% group_by(ath,year) %>% tally() %>% mutate(n=as.numeric(n)) %>% arrange(year)
+for (i in ath.info$ath) {
+  for (year in unique(year.info$year)){
+    year_n <- as.numeric(year.info[as.character(year.info$ath) == i & year.info$year == year,"n"])
+    ath.info[ath.info$ath==i,paste0("n_",year)] <- if(is.na(year_n)){0}else{year_n}
+  }
+}
+```
+
+
+```{r}
+# add total time and time per zones
+hr_summary <- all.activities %>%
+  # remove activities without HR
+  filter(!is.na(maxhr_activity)) %>%
+  group_by(ath) %>% 
+  summarise(duration_min_total = sum(duration_min, na.rm = T),
+            hr_z0_min_total = sum(hr_z0_time, na.rm = T),
+            hr_z1_min_total = sum(hr_z1_time, na.rm = T),
+            hr_z2_min_total = sum(hr_z2_time, na.rm = T),
+            hr_z3_min_total = sum(hr_z3_time, na.rm = T),
+            hr_z4_min_total = sum(hr_z4_time, na.rm = T),
+            hr_z5_min_total = sum(hr_z5_time, na.rm = T),
+            hr_zones_min_total = hr_z0_min_total + hr_z1_min_total + hr_z2_min_total + hr_z3_min_total + hr_z4_min_total + hr_z5_min_total,
+            # hr_zones_min_total_difference = round(hr_zones_min_total / duration_min_total * 100,1)
+            ) %>% 
+  mutate(hr_z0_perc_total = round(hr_z0_min_total / duration_min_total * 100, 1),
+         hr_z1_perc_total = round(hr_z1_min_total / duration_min_total * 100, 1),
+         hr_z2_perc_total = round(hr_z2_min_total / duration_min_total * 100, 1),
+         hr_z3_perc_total = round(hr_z3_min_total / duration_min_total * 100, 1),
+         hr_z4_perc_total = round(hr_z4_min_total / duration_min_total * 100, 1),
+         hr_z5_perc_total = round(hr_z5_min_total / duration_min_total * 100, 1),
+         hr_zones_perc_total = hr_z0_perc_total + hr_z1_perc_total + hr_z2_perc_total + hr_z3_perc_total + hr_z4_perc_total + hr_z5_perc_total) %>% 
+  rename(duration_min_total_withHR = duration_min_total)
+
+hr_summary_NOHR <- all.activities %>%
+  # remove activities without HR
+  filter(is.na(maxhr_activity)) %>% 
+  group_by(ath) %>%
+  summarise(duration_min_total_noHR = sum(duration_min, na.rm = T))
+
+hr_summary <- hr_summary %>% 
+  left_join(hr_summary_NOHR, by = "ath") %>% 
+  mutate(duration_min_total_noHR = ifelse(is.na(duration_min_total_noHR), 0, duration_min_total_noHR),
+         duration_min_total = duration_min_total_withHR + duration_min_total_noHR,
+         perc_total_withHR = round(duration_min_total_withHR / duration_min_total * 100,1)) %>% 
+  relocate(duration_min_total_noHR, duration_min_total, perc_total_withHR, .after=duration_min_total_withHR)
+
+ath.info <- left_join(ath.info, hr_summary, by="ath")
+
+ath.info
+```
+
+
+
+```{r}
+save(ath.info, perceive_all, all.activities, error.sessions, dup.sessions, file=
+       paste0("out/perceive_results_",format(as.Date(Sys.Date()),format="%y%m%d"),".rda"))
+```
+
+```{r}
+# load('trainingpeaks_data_PARALLEL_200701.rda')
+# 
+# save CSV
+# write.csv(tp.newzones,file=paste0("out/csv/tpeaks_summary_newzones_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# write.csv(tpeaks.all, file=paste0("out/csv/tpeaks_summary_all_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# write.csv(ath.info.test, file=paste0("out/csv/tpeaks_summary_athletes_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# write.csv(all.activities, file=paste0("out/csv/tpeaks_summary_activities_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# write.csv(error.sessions, file=paste0("out/csv/tpeaks_summary_error_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# write.csv(dup.sessions, file=paste0("out/csv/tpeaks_summary_dups_",format(as.Date(Sys.Date()),format="%y%m%d"),".csv"))
+# save all in an XLSX file
+sheet_list <- list("participants"= ath.info,
+                   "activities"=all.activities,
+                   "errors"=error.sessions,
+                   "duplicates"=dup.sessions)
+openxlsx::write.xlsx(sheet_list, keepNA=TRUE,
+           file=paste0("out/perceive_results_",format(as.Date(Sys.Date()),format="%y%m%d"),".xlsx"))
+
+# negStyle <- createStyle(fontColour = "#9C0006", bgFill = "#FFC7CE")
+# wb <- all.activities[1:10]
+# conditionalFormatting(wb, "cellIs", cols = 4, rows = 1:5, rule = ">0", style = negStyle)
+# t_act <- all.activities
+# write.xlsx(, keepNA=TRUE, firstActiveRow = 2, firstActiveCol = 3,
+#            file=paste0("out/test_",format(as.Date(Sys.Date()),format="%y%m%d"),".xlsx"))
+```
 
 

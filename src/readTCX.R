@@ -94,9 +94,6 @@ readTCX <- function(file, timezone = "", speedunit = "m_per_s", distanceunit = "
   }
   
   #### src test for device
-  device_brand_id <- if(str_detect(xml_text(doc), "Polar")) {device_brand_id <- 123} else 
-    if(str_detect(xml_text(doc), "Suunto")) {device_brand_id <- 23} else 
-      {device_brand_id <- 0}
   device_info_xml <- doc %>% xml_ns_strip() %>% 
     xml_find_all(".//Activity")  %>% 
     xml_children() %>% 
@@ -108,12 +105,8 @@ readTCX <- function(file, timezone = "", speedunit = "m_per_s", distanceunit = "
                          "Road cycling", "Core training", "Cycling",
                          "Open water", "Triathlon")
   device_model_name <- device_info_xml[!str_detect(device_info_xml, paste(info_xml_patterns, collapse="|"))][1]
-  # fix device brand if garmin
-  device_brand_id <- ifelse(str_detect(device_model_name, "Garmin"), 1, device_brand_id)
-  ###
-  
+
   attr(observations, "sport") <- sport
-  attr(observations, "device_brand_id") <- device_brand_id
   attr(observations, "device_model_name") <- device_model_name
   
   return(observations)
