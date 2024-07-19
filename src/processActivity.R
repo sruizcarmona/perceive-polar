@@ -16,19 +16,19 @@ process_polarfile <- function(zipfile, filename, id, maxhr) {
   # check errors in file or before processing the activity
   # skip files with errors
   if (class(polar) == "try-error"){
-    act.err <- onerow.df(c(id,rep('file error (reading)', length(act.err.names)-2),file), act.err.names)
+    act.err <- onerow.df(c(id,rep('file error (reading)', length(act.err.names)-2),file), act.err.names) %>% mutate(date = NA_Date_)
     return(act.err)
   }
   
   # discard if there are no records or it's shorter than a minute
   if (is.null(dim(polar)) || dim(polar)[1] < 60) {
-    act.err <- onerow.df(c(id,rep('activity error (short/no data)',length(act.err.names)-2),file), act.err.names)
+    act.err <- onerow.df(c(id,rep('activity error (short/no data)',length(act.err.names)-2),file), act.err.names) %>% mutate(date = NA_Date_)
     return(act.err)
   }
   
   # discard if activity contains more than 1 row
   # if(length(polar$session$sport) > 1 | length(polar$sport$sport) > 1) {
-  #   act.err <- onerow.df(c(id.id,rep('activity error (multiple sports/rows)',length(act.err.names)-2),file), act.err.names)
+  #   act.err <- onerow.df(c(id.id,rep('activity error (multiple sports/rows)',length(act.err.names)-2),file), act.err.names) %>% mutate(date = NA_Date_)
   #   return(act.err)
   # }
   # PERCEIVE comment
@@ -52,12 +52,12 @@ process_polarfile <- function(zipfile, filename, id, maxhr) {
   # }
   # timestamp missing
   if(is.na(act$date)) {
-    act.err <- onerow.df(c(id,rep('activity error (missing timestamp)',length(act.err.names)-2),file),act.err.names)
+    act.err <- onerow.df(c(id,rep('activity error (missing timestamp)',length(act.err.names)-2),file), act.err.names) %>% mutate(date = NA_Date_)
     return(act.err)
   }
   # wrong year (in the future), hard to find an auto fix and only 1 or 2 examples
   if (act$year > as.numeric(format(as.Date(Sys.Date()),"%Y"))) {
-    act.err <- onerow.df(c(id,rep('activity error (wrong year)',length(act.err.names)-2),file), act.err.names)
+    act.err <- onerow.df(c(id,rep('activity error (wrong year)',length(act.err.names)-2),file), act.err.names) %>% mutate(date = NA_Date_)
     return(act.err)
   }
   ###################

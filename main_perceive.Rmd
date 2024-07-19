@@ -85,6 +85,8 @@ input
 
 ```{r}
 perceive_all <- NULL
+# get start time
+start_time <- Sys.time()
 # for (i in 1:nrow(input[1:2,])) {
 for (i in 1:nrow(input)) {
   # read id and maxhr
@@ -92,23 +94,28 @@ for (i in 1:nrow(input)) {
   maxhr <- input$maxhr[i]
   writeLines(c("","###############################",
                "Calculating data...",
-               paste0("Working with id: ", id), ""))
+               paste0("Working with id: ", id, " (", i, "/", dim(input)[1], ")"), ""))
   # read files
   files <- get_list_files(id = id, zipfile = zipfile)
   # for (file in files[1:5]) {
   for (file in files) {
-    # read zip file
-    writeLines(paste0("## Working with file: ",file))
+    # get time from start_time in minutes
+    elapsed <- as.numeric(round(difftime(Sys.time(), start_time, units = "min"), 1))
+    if(which (files == file) == 1 | which (files == file) %% 10 == 0) {
+      # read zip file
+      writeLines(paste0("## ", elapsed, " min \t| (", which (files == file), "/", length(files), ") Working with file: ", file))
+    }
     polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
     perceive_all <- rbind(perceive_all, polar_act)
-    save(perceive_all,file='out/perceive_all.rda')
   }
+  save(perceive_all,file='out/perceive_all.rda')
 }
 ```
 
 
 ```{r}
 filename <- get_list_files('BG-2311', zipfile)[4]
+filename <- 'PERCEIVE_240718/BG-2311/PERCEIVE_2311_2023-07-24_09-33-46.TCX'
 i <- 1
 id <- input$id[i]
 maxhr <- input$maxhr[i]
