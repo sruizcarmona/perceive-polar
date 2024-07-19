@@ -4,4 +4,8 @@
 .Ruserdata
 *.zip
 *.tcx
+*.csv
+*.xlsx
+*.html
+*.rda
 .DS_Store

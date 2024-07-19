@@ -57,19 +57,19 @@ smooth.data <- function(data,w){
 Get files from zip
 
 ```{r}
-myfiles <- unzip("participants.zip", list = TRUE) %>% 
-  filter(Length > 0, !str_detect(Name, "__MACOSX")) %>% 
-  arrange(Name) %>% 
-  pull(Name)
+# myfiles <- unzip("participants.zip", list = TRUE) %>% 
+#   filter(Length > 0, !str_detect(Name, "__MACOSX")) %>% 
+#   arrange(Name) %>% 
+#   pull(Name)
 ```
 
 
 Read files from zip
 
 ```{r}
-file <- unz("participants.zip", myfiles[1])
-# doc <- read_xml(file)
-file
+# file <- unz("participants.zip", myfiles[1])
+# # doc <- read_xml(file)
+# file
 ```
 
 
@@ -85,8 +85,8 @@ source('src/readTCX.R')
 ```
 
 ```{r}
-fdata <- readTCX(file)
-fdata
+# fdata <- readTCX(file)
+# fdata
 ```
 
 Fix time by timezone
@@ -98,40 +98,40 @@ library(lubridate)
 # tz <- ifelse(is.na(tz_lookup_coords(fdata$LatitudeDegrees[1],fdata$LongitudeDegrees[1], method = "fast", warn = F)),
 #              "Australia/Melbourne",
 #              tz_lookup_coords(fdata$LatitudeDegrees[1],fdata$LongitudeDegrees[1], method = "fast", warn = F)) 
-tz <- replace_na(tz_lookup_coords(na.omit(fdata$LatitudeDegree)[1], na.omit(fdata$LongitudeDegrees)[1], method = "fast", warn = F), 
-                 'Australia/Melbourne')
-
-fdata <- fdata %>% 
-  mutate(Time = ymd_hms(Time, tz=tz, quiet = T))
-
-fdata
+# tz <- replace_na(tz_lookup_coords(na.omit(fdata$LatitudeDegree)[1], na.omit(fdata$LongitudeDegrees)[1], method = "fast", warn = F), 
+#                  'Australia/Melbourne')
+# 
+# fdata <- fdata %>% 
+#   mutate(Time = ymd_hms(Time, tz=tz, quiet = T))
+# 
+# fdata
 ```
 
 
 Process activity
 
 ```{r}
-fdata <- fdata %>%
-  # slice_head(n=5) %>%
-  plyr::rename(replace=c(AltitudeMeters="altitude",
-                         HeartRateBpm="heart_rate",
-                         Time="datetime",
-                         DistanceMeters="distance",
-                         Cadence="cadence",
-                         LatitudeDegrees="lat",
-                         LongitudeDegrees="lon",
-                         Watts="power",
-                         SensorState = "sensor"
-  ),
-  warn_missing=FALSE) %>%
-  # select(time, one_of("lat", "lon", "altitude", "power", "sensor", "distance", "heart_rate")) %>%
-  select(datetime, one_of("lat", "lon", "distance", "heart_rate")) %>%
-  # 'heart_rate' column, if it exists, is always numeric, and the pipeline continues without errors if the column does not exist
-  mutate_at(if('heart_rate' %in% names(.)) 'heart_rate' else integer(0), as.numeric) %>%
-  mutate(
-    day=format(as.POSIXct(datetime),"%y%m%d"),
-    timeofday=format(as.POSIXct(datetime),"%H:%M:%S"))
-fdata 
+# fdata <- fdata %>%
+#   # slice_head(n=5) %>%
+#   plyr::rename(replace=c(AltitudeMeters="altitude",
+#                          HeartRateBpm="heart_rate",
+#                          Time="datetime",
+#                          DistanceMeters="distance",
+#                          Cadence="cadence",
+#                          LatitudeDegrees="lat",
+#                          LongitudeDegrees="lon",
+#                          Watts="power",
+#                          SensorState = "sensor"
+#   ),
+#   warn_missing=FALSE) %>%
+#   # select(time, one_of("lat", "lon", "altitude", "power", "sensor", "distance", "heart_rate")) %>%
+#   select(datetime, one_of("lat", "lon", "distance", "heart_rate")) %>%
+#   # 'heart_rate' column, if it exists, is always numeric, and the pipeline continues without errors if the column does not exist
+#   mutate_at(if('heart_rate' %in% names(.)) 'heart_rate' else integer(0), as.numeric) %>%
+#   mutate(
+#     day=format(as.POSIXct(datetime),"%y%m%d"),
+#     timeofday=format(as.POSIXct(datetime),"%H:%M:%S"))
+# fdata 
 ```
 
 Calculate etrimp
@@ -151,6 +151,7 @@ onerow.df <- function(values,colnames){
 maxhr <- 200
 ath <- 'TST_001'
 zipfile <- 'participants.zip'
+zipfile <- 'PERCEIVE_240718.zip'
 ```
 
 ```{r}
@@ -387,6 +388,8 @@ read the participants ids and maxhr from csv and run the process for each file
 ```{r}
 # read athletes and maxhr
 input <- read.csv("input.csv", header=T, stringsAsFactors = F)
+input <- read.csv("polar_id_maxhr_240718.csv", header=T, stringsAsFactors = F)
+input
 ```
 
 ```{r}
@@ -401,14 +404,20 @@ act.err.names <- c("ath","datenum","date","year","month","week","start_time","du
 perceive_all <- NULL
 for (i in 1:nrow(input)) {
   # read athlete and maxhr
-  id <- input$ID[i]
-  maxhr <- input$MAXHR[i]
+  id <- input$id[i]
+  maxhr <- input$maxhr[i]
+  writeLines(c("","###############################",
+               "Calculating data...",
+               paste0("Working with athlete: ",id),""))
   # read files
   files <- get_list_files(id = id, zipfile = zipfile)
   for (file in files) {
     # read zip file
+    writeLines(c("","##",
+               paste0("Working with file: ",file),""))
     polar_file <- process_polarfile(filename = file, zipfile = zipfile, ath = id, maxhr = maxhr)
     perceive_all <- rbind(perceive_all, polar_file)
+    save(perceive_all,file='out/perceive_all.rda')
   }
 }
 ```
@@ -606,3 +615,4 @@ openxlsx::write.xlsx(sheet_list, keepNA=TRUE,
 ```
 
 
+create shiny app
