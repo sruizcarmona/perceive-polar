@@ -71,13 +71,13 @@ read the participants ids and maxhr from csv and run the process for each file
 # maxhr <- 200
 # id <- 'TST_001'
 #### define zipfile with activities
-# zipfile <- 'participants.zip'
-zipfile <- 'PERCEIVE_240718.zip'
+zipfile <- 'participants.zip'
+# zipfile <- 'PERCEIVE_240718.zip'
 
 
 #### read ids and maxhr
-# input <- read.csv("input.csv", header=T, stringsAsFactors = F)
-input <- read.csv("polar_id_maxhr_240718.csv", header=T, stringsAsFactors = F)
+input <- read.csv("input.csv", header=T, stringsAsFactors = F)
+# input <- read.csv("polar_id_maxhr_240718.csv", header=T, stringsAsFactors = F)
 input
 ```
 
@@ -97,18 +97,18 @@ for (i in 1:nrow(input)) {
                paste0("Working with id: ", id, " (", i, "/", dim(input)[1], ")"), ""))
   # read files
   files <- get_list_files(id = id, zipfile = zipfile)
-  # for (file in files[1:5]) {
-  for (file in files) {
+  for (file in files[1:5]) {
+  # for (file in files) {
     # get time from start_time in minutes
     elapsed <- as.numeric(round(difftime(Sys.time(), start_time, units = "min"), 1))
-    if(which (files == file) == 1 | which (files == file) %% 10 == 0) {
+    if(which (files == file) == 1 | which (files == file) %% 1 == 0) {
       # read zip file
-      writeLines(paste0("## ", elapsed, " min \t| (", which (files == file), "/", length(files), ") Working with file: ", file))
+      writeLines(paste0("##\t", elapsed, " min\t| (", which (files == file), "/", length(files), ") Working with file: ", file))
     }
     polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
     perceive_all <- rbind(perceive_all, polar_act)
   }
-  save(perceive_all,file='out/perceive_all.rda')
+  # save(perceive_all,file='out/perceive_all.rda')
 }
 ```
 
@@ -116,7 +116,8 @@ for (i in 1:nrow(input)) {
 ```{r}
 filename <- get_list_files('BG-2311', zipfile)[4]
 filename <- 'PERCEIVE_240718/BG-2311/PERCEIVE_2311_2023-07-24_09-33-46.TCX'
-i <- 1
+filename <- 'PERCEIVE_240718/NK-2729/perceive_rct_2023-07-20_17-00-00.TCX'
+i <- 7
 id <- input$id[i]
 maxhr <- input$maxhr[i]
 polar_file <- unz(zipfile, filename)

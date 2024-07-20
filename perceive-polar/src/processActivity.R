@@ -9,7 +9,7 @@
 process_polarfile <- function(zipfile, filename, id, maxhr) {
   # read file and create polar
   polar_file <- unz(zipfile, filename)
-  polar <- try(readTCX(polar_file), silent = T)
+  polar <- try(readTCX(polar_file),silent=T)
   
   
   ###################
