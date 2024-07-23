@@ -1,32 +1,9 @@
 ---
 title: "PERCEIVE POLAR"
-output:
-  html_notebook:
-    toc: true
-    toc_depth: 3
-    toc_float:
-      collapsed: false
-      smooth_scroll: true
-    theme: cosmo
-    df_print: paged
-    highlight: tango
-    code_folding: hide
+output: html_document
 ---
 
-<script>
-$(document).ready(function() {
-  $items = $('div#TOC li');
-  $items.each(function(idx) {
-    num_ul = $(this).parentsUntil('#TOC').length;
-    $(this).css({'text-indent': num_ul * 10, 'padding-left': 0});
-  });
-
-});
-</script>
-
-***
-
-Load libraries for reading fit data and create maps and plots.
+Load libraries
 
 ```{r warning=FALSE, results='hide', echo=F}
 # library(ggplot2)
@@ -59,6 +36,8 @@ source('src/getFilesZipByID.R')
 source('src/getActivityInfo.R')
 # process activity
 source('src/processActivity.R')
+# summarise results
+source('src/summariseResults.R')
 ```
 
 # MAIN RUN
@@ -71,16 +50,16 @@ read the participants ids and maxhr from csv and run the process for each file
 # maxhr <- 200
 # id <- 'TST_001'
 #### define zipfile with activities
-zipfile <- 'participants.zip'
-# zipfile <- 'PERCEIVE_240718.zip'
+# zipfile <- 'input/participants.zip'
+zipfile <- 'input/PERCEIVE_240718.zip'
+zipfile <- 'input/PERCEIVE_240722.zip'
 
 
 #### read ids and maxhr
-input <- read.csv("input.csv", header=T, stringsAsFactors = F)
-# input <- read.csv("polar_id_maxhr_240718.csv", header=T, stringsAsFactors = F)
+# input <- read.csv("input.csv", header=T, stringsAsFactors = F)
+input <- read.csv("input/polar_id_maxhr_240718.csv", header=T, stringsAsFactors = F)
 input
 ```
-
 
 
 ```{r}
@@ -96,14 +75,16 @@ for (i in 1:nrow(input)) {
                "Calculating data...",
                paste0("Working with id: ", id, " (", i, "/", dim(input)[1], ")"), ""))
   # read files
-  files <- get_list_files(id = id, zipfile = zipfile)
-  for (file in files[1:5]) {
-  # for (file in files) {
+  files <- get_files_id(id = id, zipfile = zipfile)
+  for (file in files[1]) {
+    # skip if file is NA
+    if(is.na(file)) {next}
+    # for (file in files) {
     # get time from start_time in minutes
     elapsed <- as.numeric(round(difftime(Sys.time(), start_time, units = "min"), 1))
-    if(which (files == file) == 1 | which (files == file) %% 1 == 0) {
+    if(which (files == file) == 1 | which (files == file) %% 20 == 0) {
       # read zip file
-      writeLines(paste0("##\t", elapsed, " min\t| (", which (files == file), "/", length(files), ") Working with file: ", file))
+      writeLines(paste0("##  ", elapsed, " min\t| (", which (files == file), "/", length(files), ") Working with file: ", file))
     }
     polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
     perceive_all <- rbind(perceive_all, polar_act)
@@ -114,14 +95,14 @@ for (i in 1:nrow(input)) {
 
 
 ```{r}
-filename <- get_list_files('BG-2311', zipfile)[4]
-filename <- 'PERCEIVE_240718/BG-2311/PERCEIVE_2311_2023-07-24_09-33-46.TCX'
-filename <- 'PERCEIVE_240718/NK-2729/perceive_rct_2023-07-20_17-00-00.TCX'
-i <- 7
-id <- input$id[i]
-maxhr <- input$maxhr[i]
-polar_file <- unz(zipfile, filename)
-polar <- readTCX(polar_file)
+# filename <- get_list_files('BG-2311', zipfile)[4]
+# filename <- 'PERCEIVE_240718/BG-2311/PERCEIVE_2311_2023-07-24_09-33-46.TCX'
+# filename <- 'PERCEIVE_240718/NK-2729/perceive_rct_2023-07-20_17-00-00.TCX'
+# i <- 7
+# id <- input$id[i]
+# maxhr <- input$maxhr[i]
+# polar_file <- unz(zipfile, filename)
+# polar <- readTCX(polar_file)
 ```
 
 ```{r}
@@ -135,156 +116,32 @@ perceive_all
 
 split training.all into correct sessions, duplicate and error
 
-```{r}
-error.sessions <- perceive_all %>% filter(str_detect(date,"error")) %>% select(id,file,reason=date)
-
-# update all.activities
-all.activities <- perceive_all %>%
-  filter(!str_detect(date,"error")) %>% 
-  mutate(filename=sapply(str_split(file,"/"),function(x) last(x))) %>%
-  # group_by(id.id,filename) %>%
-  # mutate(id=row_number(),source=first(file)) %>%
-  # ungroup() %>%
-  mutate_if(is.factor, as.character) %>%
-  # filter(id == 1) %>% 
-  select(-filename)
-
-# clean columns, so they all have the correct type (numbers are not chars)
-all.activities <- type.convert(all.activities, as.is=T)
-
-# get duplicated activities based on time, etc
-dup.sessions <- all.activities %>%
-                        group_by(id, date, start_time) %>% 
-                        # mutate device_brand_id so 0s are 9999 and do not interfere with sorting in next step
-                        # mutate(device_brand_id = ifelse(device_brand_id == 0, 9999, device_brand_id)) %>% 
-                        # arrange by device_brand_id (so garmin would always be higher)
-                        # arrange(device_brand_id, -total_dist.km, .by_group=T) %>%
-                        # arrange(-total_dist.km, .by_group=T) %>%
-                        mutate(id=row_number(),source=first(file)) %>%
-                        ungroup() %>%
-                        mutate_if(is.factor, as.character) %>%
-                        filter(id > 1) %>%
-                        mutate(reason="repeated activity") %>%
-                        select(id, file, source, reason)
-
-# unique activities
-all.activities <- all.activities %>%
-  group_by(id, date, start_time) %>%
-  # mutate device_brand_id so 0s are 9999 and do not interfere with sorting in next step
-  # arrange by device_brand_id (so garmin would always be higher)
-  # arrange(-total_dist.km, .by_group=T) %>%% 
-  mutate(id=row_number(), source=first(file)) %>%
-  ungroup() %>%
-  mutate_if(is.factor, as.character) %>%
-  filter(id == 1) %>% 
-  select(-source, -id)
-
-# split z01 into z0 and z1 and all the respective times
-all.activities <- all.activities %>% 
-  mutate(hr_zones.total_time = hr_z0_time + hr_z1_time + hr_z2_time + hr_z3_time + hr_z4_time + hr_z5_time,
-         hr_zones.total.perc = hr_z0 + hr_z1 + hr_z2 + hr_z3 + hr_z4 + hr_z5) %>% 
-  # relocate(any_of(c("hr_z0","hr_z1")), .after = hr_z01) %>% 
-  # relocate(any_of(c("hr_z01_time", "hr_z0_time")), .before = hr_z1_time) %>% 
-  relocate(hr_zones.total_time, .after = hr_z5_time) %>%
-  relocate(hr_zones.total.perc, .after = hr_z5)
-```
-
-populate id.info
 
 ```{r}
-id.info <- all.activities %>%
-  mutate(folder=tolower(sapply(str_split(file,"/"),function(x) x[4]))) %>%
-  group_by(id) %>%
-  summarise(total_activities=n(), 
-            n_cycling=sum(sport =="Cycling", na.rm = T),
-            n_running=sum(sport =="Running", na.rm = T),
-            n_other=sum(!grepl("Running|Cycling",sport )),
-            n_heart=sum(!is.na(hr_avg)),
-           ) %>% 
-            # n_power=sum(!is.na(power.avg)),
-            # n_heart_power=sum(!is.na(power.avg) & !is.na(hrmax.activity))
-  mutate(perc_heart=round(n_heart/total_activities*100,1),
-         
-         #        perc_power = round(n_power/total_activities*100,1),
-         #        perc_heart_power = round(n_heart_power/total_activities*100,1)
-  ) %>% 
-  arrange(id)
-
-# add error and duplicate count
-for (i in id.info$id) {
-  id.info[id.info$id==i,'n_error'] <- sum(!is.na(str_extract(error.sessions$file,i)))
-  id.info[id.info$id==i,'n_duplicates'] <- sum(!is.na(str_extract(dup.sessions$file,i)))
-}
-# add year count
-year.info <- all.activities %>% group_by(id,year) %>% tally() %>% mutate(n=as.numeric(n)) %>% arrange(year)
-for (i in id.info$id) {
-  for (year in unique(year.info$year)){
-    year_n <- as.numeric(year.info[as.character(year.info$id) == i & year.info$year == year,"n"])
-    id.info[id.info$id==i,paste0("n_",year)] <- if(is.na(year_n)){0}else{year_n}
-  }
-}
-```
-
-
-```{r}
-# add total time and time per zones
-hr_summary <- all.activities %>%
-  # remove activities without HR
-  filter(!is.na(maxhr_activity)) %>%
-  group_by(id) %>% 
-  summarise(duration_min_total = sum(duration_min, na.rm = T),
-            hr_z0_min_total = sum(hr_z0_time, na.rm = T),
-            hr_z1_min_total = sum(hr_z1_time, na.rm = T),
-            hr_z2_min_total = sum(hr_z2_time, na.rm = T),
-            hr_z3_min_total = sum(hr_z3_time, na.rm = T),
-            hr_z4_min_total = sum(hr_z4_time, na.rm = T),
-            hr_z5_min_total = sum(hr_z5_time, na.rm = T),
-            hr_zones_min_total = hr_z0_min_total + hr_z1_min_total + hr_z2_min_total + hr_z3_min_total + hr_z4_min_total + hr_z5_min_total,
-            # hr_zones_min_total_difference = round(hr_zones_min_total / duration_min_total * 100,1)
-            ) %>% 
-  mutate(hr_z0_perc_total = round(hr_z0_min_total / duration_min_total * 100, 1),
-         hr_z1_perc_total = round(hr_z1_min_total / duration_min_total * 100, 1),
-         hr_z2_perc_total = round(hr_z2_min_total / duration_min_total * 100, 1),
-         hr_z3_perc_total = round(hr_z3_min_total / duration_min_total * 100, 1),
-         hr_z4_perc_total = round(hr_z4_min_total / duration_min_total * 100, 1),
-         hr_z5_perc_total = round(hr_z5_min_total / duration_min_total * 100, 1),
-         hr_zones_perc_total = hr_z0_perc_total + hr_z1_perc_total + hr_z2_perc_total + hr_z3_perc_total + hr_z4_perc_total + hr_z5_perc_total) %>% 
-  rename(duration_min_total_withHR = duration_min_total)
-
-hr_summary_NOHR <- all.activities %>%
-  # remove activities without HR
-  filter(is.na(maxhr_activity)) %>% 
-  group_by(id) %>%
-  summarise(duration_min_total_noHR = sum(duration_min, na.rm = T))
-
-hr_summary <- hr_summary %>% 
-  left_join(hr_summary_NOHR, by = "id") %>% 
-  mutate(duration_min_total_noHR = ifelse(is.na(duration_min_total_noHR), 0, duration_min_total_noHR),
-         duration_min_total = duration_min_total_withHR + duration_min_total_noHR,
-         perc_total_withHR = round(duration_min_total_withHR / duration_min_total * 100,1)) %>% 
-  relocate(duration_min_total_noHR, duration_min_total, perc_total_withHR, .after=duration_min_total_withHR)
-
-id.info <- left_join(id.info, hr_summary, by="id")
-
-id.info
+# get results
+results <- sum_results(perceive_all)
+perceive_info <- results$perceive_info
+all.activities <- results$all.activities
+error.sessions <- results$error.sessions
+perceive_info
 ```
 
 
 
 ```{r}
-save(id.info, perceive_all, all.activities, error.sessions, dup.sessions, file=
+# save results
+save(perceive_info, perceive_all, all.activities, error.sessions, file=
        paste0("out/perceive_results_",format(as.Date(Sys.Date()),format="%y%m%d"),".rda"))
 ```
 
 ```{r}
 # save all in an XLSX file
-sheet_list <- list("participants" = id.info,
+sheet_list <- list("participants" = perceive_info,
                    "activities" = all.activities,
-                   "errors" = error.sessions,
-                   "duplicates" = dup.sessions)
+                   "errors" = error.sessions
+                   )
 openxlsx::write.xlsx(sheet_list, keepNA  =TRUE,
            file=paste0("out/perceive_results_", format(as.Date(Sys.Date()), format = "%y%m%d"),".xlsx"))
 ```
 
 
-create shiny app

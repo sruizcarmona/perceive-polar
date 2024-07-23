@@ -1,6 +1,6 @@
 ############################################################################################################
 ## MAIN FUNCTION 
-## extract heart rate, power and speed from a file
+## extract heart rate from a file
 ###
 ## input filename and maxHR
 ## output dataframe with hr,power, speed and correlations in columns
@@ -60,6 +60,9 @@ get_act_info_from_polar <- function(polar, maxhr) {
   a$sport <- ifelse(!is.null(attributes(polar)$sport),
                     attributes(polar)$sport,
                     NA)
+  a$sport_f <- ifelse(!is.null(attributes(polar)$sport_filename),
+                      attributes(polar)$sport_filename,
+                      NA)
   # heart stuff
   a$maxhr_participant <- maxhr
   ###################
