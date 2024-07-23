@@ -34,9 +34,9 @@ sum_results <- function(perceive) {
     ) %>% 
     mutate(perc_heart=round(n_heart/total_activities*100,1),
     ) %>% 
-    arrange(id) %>% 
     full_join(perceive %>% select(id), by='id') %>% 
-    mutate_if(is.numeric, coalesce, 0)
+    mutate_if(is.numeric, coalesce, 0) %>% 
+    arrange(id)
     
   
   # add error and duplicate count
