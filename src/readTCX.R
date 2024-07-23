@@ -9,10 +9,10 @@
 ## https://github.com/trackerproject/trackeR/blob/7834a6ef6b91f6844acb4b87b52490713baecd05/R/read.R
 ############################################################################################################
 
-readTCX <- function(file, timezone = "", speedunit = "m_per_s", distanceunit = "m",
+readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", distanceunit = "m",
                     parallel = FALSE, cores = getOption("mc.cores", 2L),...) {
   
-  doc <- read_xml(file)
+  doc <- read_xml(tcxfile)
   ns <- xml_ns(doc)
   
   children_names <- function(x, xpath, ns) {
@@ -108,6 +108,10 @@ readTCX <- function(file, timezone = "", speedunit = "m_per_s", distanceunit = "
 
   attr(observations, "sport") <- sport
   attr(observations, "device_model_name") <- device_model_name
+  attr(observations, "sport_filename") <- str_extract(filename, "_SPORT_\\w+.TCX") %>% 
+    str_remove("_SPORT_") %>% 
+    str_remove(".TCX") %>%
+    str_to_sentence()
   
   return(observations)
 }
