@@ -112,6 +112,7 @@ server <- function(input, output) {
   })
 
   ### MAIN RUN
+  # define reactive value
   perceive_all <- reactiveValues(
     df = NULL
   )
@@ -123,9 +124,8 @@ server <- function(input, output) {
       # add progress bar
       withProgress(message = 'Processing participants...', value = 0, {
         # loop through athletes
-        # for (i in 1:totalids) {
-          for (i in 1:3) {
-            # move progress bar
+        for (i in 1:totalids) {
+          # move progress bar
           incProgress(1/totalids, detail = paste0(i, '/', totalids))
           # read id and maxhr
           id <- input$id[i]
@@ -137,7 +137,7 @@ server <- function(input, output) {
           # print(myfiles)
           # add file progress bar
           withProgress(message = '', value = 0, {
-            for (file in myfiles[1]) {
+            for (file in myfiles) {
               # print(file)
               if(is.na(file)) {next}
               # print('file')
@@ -157,10 +157,10 @@ server <- function(input, output) {
       # perceive_info <<- perceive_all
       # process results
       results <- sum_results(perceive_all$df)
-      # perceive_info <<- results$perceive_info
-      # all.activities <<- results$all.activities
-      # error.sessions <<- results$error.sessions
-      # dup.sessions <<- results$dup.sessions
+      # print(results)
+      perceive_info <<- results$perceive_info
+      all.activities <<- results$all.activities
+      error.sessions <<- results$error.sessions
   })
   
   # make download button appear after uploading files and running process
@@ -173,42 +173,41 @@ server <- function(input, output) {
                      style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
   })
   # download button
+  output$download <- downloadHandler(
+    filename = function() {
+      paste0("perceive_results_", format(as.Date(Sys.Date()), format = "%y%m%d"),".xlsx")
+      # paste("perceive_all", ".xlsx", sep = "")
+    },
+    content = function(file) {
+      # save all in an XLSX file
+      sheet_list <- list("participants" = perceive_info,
+                         "activities" = all.activities,
+                         "errors" = error.sessions
+                         )
+      openxlsx::write.xlsx(sheet_list,
+                           keepNA = TRUE,
+                           file = file)
+    },
+    contentType = "application/xlsx"
+  )
+  #############
+  ## download button TEST
   # output$download <- downloadHandler(
+  # 
+  #   # This function returns a string which tells the client
+  #   # browser what name to use when saving the file.
   #   filename = function() {
-  #     paste0("perceive_results_", format(as.Date(Sys.Date()), format = "%y%m%d"),".xlsx")
-  #     # paste("perceive_all", ".xlsx", sep = "")
+  #     paste('test', "rds", sep = ".") # example : iris.Rdata
+  # 
   #   },
+  # 
+  #   # This function should write data to a file given to it by
+  #   # the argument 'file'.
   #   content = function(file) {
-  #     # save all in an XLSX file
-  #     sheet_list <- list("participants" = perceive_all
-  #                        # "activities" = all.activities,
-  #                        # "errors" = error.sessions,
-  #                        # "duplicates" = dup.sessions
-  #                        )
-  #     openxlsx::write.xlsx(sheet_list,
-  #                          keepNA = TRUE,
-  #                          file = file)
-  #   },
-  #   contentType = "application/xlsx"
+  #     saveRDS(perceive_all$df, file)
+  #   }
   # )
   #############
-  # download button
-  
-  output$download <- downloadHandler(
-    
-    # This function returns a string which tells the client
-    # browser what name to use when saving the file.
-    filename = function() {
-      paste('test', "rds", sep = ".") # example : iris.Rdata
-      
-    },
-    
-    # This function should write data to a file given to it by
-    # the argument 'file'.
-    content = function(file) {
-      saveRDS(perceive_all$df, file)
-    }
-  )
 }
 
 # Run the application 
