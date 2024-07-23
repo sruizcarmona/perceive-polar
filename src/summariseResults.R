@@ -34,12 +34,14 @@ sum_results <- function(perceive) {
     ) %>% 
     mutate(perc_heart=round(n_heart/total_activities*100,1),
     ) %>% 
-    arrange(id)
+    arrange(id) %>% 
+    full_join(perceive %>% select(id), by='id') %>% 
+    mutate_if(is.numeric, coalesce, 0)
+    
   
   # add error and duplicate count
   for (i in perceive_info$id) {
     perceive_info[perceive_info$id==i,'n_error'] <- sum(!is.na(str_extract(error.sessions$file,i)))
-    perceive_info[perceive_info$id==i,'n_duplicates'] <- sum(!is.na(str_extract(dup.sessions$file,i)))
   }
   # add year count
   year.info <- all.activities %>% group_by(id,year) %>% tally() %>% mutate(n=as.numeric(n)) %>% arrange(year)
@@ -51,7 +53,7 @@ sum_results <- function(perceive) {
   }
   # reorganize columns
   perceive_info <- perceive_info %>% 
-    relocate(c(n_error, n_duplicates), .after = total_activities)
+    relocate(n_error, .after = total_activities)
   return (list(perceive_info=perceive_info,
                all.activities=all.activities,
                error.sessions=error.sessions))
