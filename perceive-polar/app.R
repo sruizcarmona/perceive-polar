@@ -32,6 +32,8 @@ source('src/getFilesZipByID.R')
 source('src/getActivityInfo.R')
 # process activity
 source('src/processActivity.R')
+# process results
+source('src/summariseResults.R')
 ##############################
 
 
@@ -90,15 +92,16 @@ server <- function(input, output) {
       {
         pop <- read.csv(input$csvinput$datapath, header = T, stringsAsFactors = F)
         # pop <- rbind(pop, data.frame(id = "test", maxhr = 100))
-        files_in_zip <- unzip(input$zipfile$datapath, list = TRUE) %>% filter(Length > 0)
-        files_by_id <- files_in_zip %>% separate(Name, into = c("id", "file"), sep = "/") %>% count(id)
+        files_in_zip <- get_list_files(zipfile = input$zipfile$datapath)
+        files_by_id <- files_in_zip %>% separate(Name, into = c("p", "id", "file"), sep = "/") %>% count(id)
         df <- left_join(pop, files_by_id, by = 'id') %>% 
           # mutate_if(is.numeric, coalesce, 0) %>% 
           # mutate(across(where(is.numeric), coalesce, 0)) %>% 
           mutate(across(where(is.numeric), \(x) coalesce(x, 0))) %>% 
           mutate(`Participant ID` = id,
                  `TCX files in ZIP` = as.integer(n)) %>%
-          select(`Participant ID`, `TCX files in ZIP`)
+          select(`Participant ID`, `TCX files in ZIP`) %>% 
+          arrange(`Participant ID`)
       },
       error = function(e) {
         # return a safeError if a parsing error occurs
@@ -109,8 +112,10 @@ server <- function(input, output) {
   })
 
   ### MAIN RUN
+  perceive_all <- reactiveValues(
+    df = NULL
+  )
   observeEvent(input$process, {
-      perceive_all <- NULL
       csvinput <- input$csvinput$datapath
       zipfile <- input$zipfile$datapath
       input <- read.csv(csvinput, header=T, stringsAsFactors = F)
@@ -118,8 +123,9 @@ server <- function(input, output) {
       # add progress bar
       withProgress(message = 'Processing participants...', value = 0, {
         # loop through athletes
-        for (i in 1:totalids) {
-          # move progress bar
+        # for (i in 1:totalids) {
+          for (i in 1:3) {
+            # move progress bar
           incProgress(1/totalids, detail = paste0(i, '/', totalids))
           # read id and maxhr
           id <- input$id[i]
@@ -127,22 +133,34 @@ server <- function(input, output) {
           # print(id)
           # print(maxhr)
           # read files
-          myfiles <- get_list_files(id = id, zipfile = zipfile)
+          myfiles <- get_files_id(id = id, zipfile = zipfile)
           # print(myfiles)
           # add file progress bar
           withProgress(message = '', value = 0, {
-            for (file in myfiles) {
+            for (file in myfiles[1]) {
               # print(file)
+              if(is.na(file)) {next}
+              # print('file')
               incProgress(1/length(myfiles), detail = paste0('File ', which (myfiles == file), '/', length(myfiles)))
               polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
               # print(polar_act)
-              perceive_all <- rbind(perceive_all, polar_act)
+              perceive_all$df <- rbind(perceive_all$df, polar_act)
+              # perceive_all <- rbind(perceive_all, polar_act)
+              # perceive_all <- do.call(rbind, list(perceive_all, polar_act))
             }
-          })
+           })
+          # print(dim(perceive_all$df))
+          # print(perceive_all$df)
         }
       })
       #final perceive_all process!!!
-      perceive <<- perceive_all
+      # perceive_info <<- perceive_all
+      # process results
+      results <- sum_results(perceive_all$df)
+      # perceive_info <<- results$perceive_info
+      # all.activities <<- results$all.activities
+      # error.sessions <<- results$error.sessions
+      # dup.sessions <<- results$dup.sessions
   })
   
   # make download button appear after uploading files and running process
@@ -155,21 +173,41 @@ server <- function(input, output) {
                      style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
   })
   # download button
+  # output$download <- downloadHandler(
+  #   filename = function() {
+  #     paste0("perceive_results_", format(as.Date(Sys.Date()), format = "%y%m%d"),".xlsx")
+  #     # paste("perceive_all", ".xlsx", sep = "")
+  #   },
+  #   content = function(file) {
+  #     # save all in an XLSX file
+  #     sheet_list <- list("participants" = perceive_all
+  #                        # "activities" = all.activities,
+  #                        # "errors" = error.sessions,
+  #                        # "duplicates" = dup.sessions
+  #                        )
+  #     openxlsx::write.xlsx(sheet_list,
+  #                          keepNA = TRUE,
+  #                          file = file)
+  #   },
+  #   contentType = "application/xlsx"
+  # )
+  #############
+  # download button
+  
   output$download <- downloadHandler(
+    
+    # This function returns a string which tells the client
+    # browser what name to use when saving the file.
     filename = function() {
-      paste("perceive_all", ".xlsx", sep = "")
+      paste('test', "rds", sep = ".") # example : iris.Rdata
+      
     },
+    
+    # This function should write data to a file given to it by
+    # the argument 'file'.
     content = function(file) {
-      # sheet_list <- list("participants" = id.info,
-      #                    "activities" = all.activities,
-      #                    "errors" = error.sessions,
-      #                    "duplicates" = dup.sessions)
-      sheet_list <- list("test" = perceive)
-      openxlsx::write.xlsx(sheet_list,
-                           keepNA = TRUE,
-                           file = file)
-    },
-    contentType = "application/xlsx"
+      saveRDS(perceive_all$df, file)
+    }
   )
 }
 
