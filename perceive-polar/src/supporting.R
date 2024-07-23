@@ -20,7 +20,7 @@ smooth.data <- function(data,w,r=2){
 }
 
 # error names to populate table
-act.err.names <- c("id","datenum","date","year","month","week","start_time","duration_min","total_dist_km","device_model_name","sport",
+act.err.names <- c("id","datenum","date","year","month","week","start_time","duration_min","total_dist_km","device_model_name","sport", "sport_f",
                    "maxhr_participant","maxhr_activity","maxhr_perc","maxhr_intensity","hr_avg",
                    "hr_z0","hr_z1","hr_z2","hr_z3","hr_z4","hr_z5",
                    "hr_z0_time","hr_z1_time","hr_z2_time","hr_z3_time","hr_z4_time","hr_z5_time","etrimp","file")
