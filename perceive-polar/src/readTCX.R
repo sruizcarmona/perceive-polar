@@ -94,12 +94,11 @@ readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", dis
   }
   
   #### src test for device
-  device_info_xml <- doc %>% xml_ns_strip() %>% 
-    xml_find_all(".//Activity")  %>% 
-    xml_children() %>% 
-    xml_find_all("//Creator") %>% 
-    xml_children() %>% 
-    xml_find_all("//Name") %>% xml_text()
+  device_info_xml <- doc %>% 
+    xml_find_all(paste0("//", activity_ns, ":", "Activity", "//", activity_ns, ":Creator//", activity_ns, ":Name")) %>% 
+    xml_text()
+  
+  ################
   info_xml_patterns <- c("Track & field", "Indoor cycling",
                          "Kayaking", "Other", "Road running", "Running",
                          "Road cycling", "Core training", "Cycling",
