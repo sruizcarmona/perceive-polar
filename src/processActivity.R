@@ -7,9 +7,16 @@
 ## output activity info
 ############################################################################################################
 process_polarfile <- function(zipfile, filename, id, maxhr) {
+
+  # first, check if file is too big (20MB), and ignore (errors in shinyapps)
+  if(get_list_files(zipfile) %>% filter(Name == filename) %>% pull(Length) > 20000000) {
+    act.err <- onerow.df(c(id,rep('file error (too big)', length(act.err.names)-2),filename), act.err.names) %>% mutate(date = NA_Date_)
+    return(act.err)
+  }
+  
   # read file and create polar
-  polar_file <- unz(zipfile, filename)
-  polar <- try(readTCX(polar_file, filename), silent = T)
+  # polar_file <- unz(zipfile, filename)
+  polar <- try(readTCX(zipfile, filename), silent = T)
   
   
   ###################

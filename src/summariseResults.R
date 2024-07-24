@@ -33,10 +33,7 @@ sum_results <- function(perceive) {
               n_heart=sum(!is.na(hr_avg)),
     ) %>% 
     mutate(perc_heart=round(n_heart/total_activities*100,1),
-    ) %>% 
-    full_join(perceive %>% select(id) %>% distinct(), by='id') %>% 
-    mutate_if(is.numeric, coalesce, 0) %>% 
-    arrange(id)
+    )
     
   
   # add error and duplicate count
