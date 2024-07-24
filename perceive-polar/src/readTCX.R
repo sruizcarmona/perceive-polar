@@ -9,10 +9,11 @@
 ## https://github.com/trackerproject/trackeR/blob/7834a6ef6b91f6844acb4b87b52490713baecd05/R/read.R
 ############################################################################################################
 
-readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", distanceunit = "m",
-                    parallel = FALSE, cores = getOption("mc.cores", 2L),...) {
+readTCX <- function(zipfile, filename, timezone = "", speedunit = "m_per_s", distanceunit = "m", ...) {
   
+  tcxfile <-  unz(zipfile, filename)
   doc <- read_xml(tcxfile)
+  # p <- xmlToDataFrame(xmlParse(doc))
   ns <- xml_ns(doc)
   
   children_names <- function(x, xpath, ns) {
@@ -24,9 +25,9 @@ readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", dis
   extensions_ns <- names(which(ns == "http://www.garmin.com/xmlschemas/ActivityExtension/v2")[1])
 
   ## Sport
-  sport <- xml_attr(xml_find_all(doc, paste0("//", activity_ns, ":", "Activity")), "Sport")
+  # sport <- xml_attr(xml_find_all(doc, paste0("//", activity_ns, ":", "Activity")), "Sport")
   # some files report it as "biking"
-  sport <- ifelse(sport == "Biking", "Cycling", sport)
+  # sport <- ifelse(sport == "Biking", "Cycling", sport)
   
   ## Tp
   tp_xpath <- paste0("//", activity_ns, ":", "Trackpoint")
@@ -62,6 +63,7 @@ readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", dis
   is_sensorstate <- tp_vars$name == "SensorState"
   
   tps <- xml_find_all(doc, tp_xpath, ns[activity_ns])
+  
   ## Double loop to extract obs
   observations <- apply(tp_vars, 1, function(var) {
     c_xpath <- paste0(".", "//", var["ns"], ":", var["name"])
@@ -94,20 +96,20 @@ readTCX <- function(tcxfile, filename, timezone = "", speedunit = "m_per_s", dis
   }
   
   #### src test for device
-  device_info_xml <- doc %>% 
-    xml_find_all(paste0("//", activity_ns, ":", "Activity", "//", activity_ns, ":Creator//", activity_ns, ":Name")) %>% 
+  device_model_name <- doc %>%
+    xml_find_all(paste0("//", activity_ns, ":", "Activity", "//", activity_ns, ":Creator//", activity_ns, ":Name")) %>%
     xml_text()
   
   ################
-  info_xml_patterns <- c("Track & field", "Indoor cycling",
-                         "Kayaking", "Other", "Road running", "Running",
-                         "Road cycling", "Core training", "Cycling",
-                         "Open water", "Triathlon")
-  device_model_name <- device_info_xml[!str_detect(device_info_xml, paste(info_xml_patterns, collapse="|"))][1]
+  # info_xml_patterns <- c("Track & field", "Indoor cycling",
+  #                        "Kayaking", "Other", "Road running", "Running",
+  #                        "Road cycling", "Core training", "Cycling",
+  #                        "Open water", "Triathlon")
+  # device_model_name <- device_info_xml[!str_detect(device_info_xml, paste(info_xml_patterns, collapse="|"))][1]
 
-  attr(observations, "sport") <- sport
+  # attr(observations, "sport") <- sport
   attr(observations, "device_model_name") <- device_model_name
-  attr(observations, "sport_filename") <- str_extract(filename, "_SPORT_\\w+.TCX") %>% 
+  attr(observations, "sport") <- str_extract(filename, "_SPORT_\\w+.TCX") %>% 
     str_remove("_SPORT_") %>% 
     str_remove(".TCX") %>%
     str_to_sentence()

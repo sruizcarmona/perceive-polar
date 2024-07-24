@@ -58,10 +58,7 @@ get_act_info_from_polar <- function(polar, maxhr) {
                                 "unknown")
   # sport info
   a$sport <- ifelse(!is.null(attributes(polar)$sport),
-                    attributes(polar)$sport,
-                    NA)
-  a$sport_f <- ifelse(!is.null(attributes(polar)$sport_filename),
-                      attributes(polar)$sport_filename,
+                      attributes(polar)$sport,
                       NA)
   # heart stuff
   a$maxhr_participant <- maxhr
