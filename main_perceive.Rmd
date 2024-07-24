@@ -51,8 +51,9 @@ read the participants ids and maxhr from csv and run the process for each file
 # id <- 'TST_001'
 #### define zipfile with activities
 # zipfile <- 'input/participants.zip'
-zipfile <- 'input/PERCEIVE_240718.zip'
-zipfile <- 'input/PERCEIVE_240722.zip'
+# zipfile <- 'input/PERCEIVE_240718.zip'
+# zipfile <- 'input/PERCEIVE_240722.zip'
+zipfile <- 'input/PERCEIVE_240723.zip'
 
 
 #### read ids and maxhr
@@ -73,13 +74,13 @@ for (i in 1:nrow(input)) {
   maxhr <- input$maxhr[i]
   writeLines(c("","###############################",
                "Calculating data...",
-               paste0("Working with id: ", id, " (", i, "/", dim(input)[1], ")"), ""))
+               paste0("Working with id: ", id, " (", i, "/", dim(input)[1], ")  |  ", format(Sys.time(), "%H:%M")), ""))
   # read files
   files <- get_files_id(id = id, zipfile = zipfile)
-  for (file in files[1]) {
+  for (file in files) {
+    # for (file in files[1]) {
     # skip if file is NA
     if(is.na(file)) {next}
-    # for (file in files) {
     # get time from start_time in minutes
     elapsed <- as.numeric(round(difftime(Sys.time(), start_time, units = "min"), 1))
     if(which (files == file) == 1 | which (files == file) %% 20 == 0) {
