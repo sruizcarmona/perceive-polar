@@ -6,11 +6,13 @@
 
 sum_results <- function(perceive) {
   # process results to find errors, duplicates, etc
-  error.sessions <- perceive %>% filter(str_detect(datenum,"error")) %>% select(id, file, reason = datenum)
+  error.sessions <- perceive %>% filter(str_detect(datenum,"error")) %>% select(id, file, reason = datenum) %>% 
+    mutate(file_id = paste0(id, sapply(str_split(file,"/"),function(x) paste0('/*', str_sub(last(x),-36,-1)))))  %>% 
+    select(-file)
   # update all.activities
   all.activities <- perceive %>%
     filter(!str_detect(datenum,"error")) %>% 
-    mutate(file_id = sapply(str_split(file,"/"),function(x) paste0('...', str_sub(last(x),-36,-1)))) %>% 
+    mutate(file_id = paste0(id, sapply(str_split(file,"/"),function(x) paste0('/*', str_sub(last(x),-36,-1))))) %>% 
     mutate_if(is.factor, as.character) %>% 
     select(-file)
   # clean columns, so they all have the correct type (numbers are not chars)
