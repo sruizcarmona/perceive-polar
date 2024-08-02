@@ -51,12 +51,22 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
                       accept = c("text/csv",
                                  "text/comma-separated-values,text/plain",
                                  ".csv")),
+            # add button to download sample csv
+            downloadButton("example", "   Get example CSV",
+                           icon = icon("file-export"),
+                           style="color: #000000; background-color: #bce8ff; border-color: #98b8db"),
+            tags$br(),
+            tags$br(),
             fileInput("zipfile", "Choose ZIP File",
                       multiple = F,
                       accept = c(".zip")),
+            tags$br(),
+            tags$br(),
             actionButton("process", "   Process uploaded data",
                          icon = icon("play", class = "fa-fw"),
                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+            tags$br(),
+            tags$br(),
             tags$hr(),
             uiOutput("downloadData")
             # downloadButton("download", "Download output",
@@ -77,6 +87,17 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
 server <- function(input, output) {
   # increase upload limit to 300MB
   options(shiny.maxRequestSize=300*1024^2)
+  
+  # download example csv
+  output$example <- downloadHandler(
+    filename = function() {
+      "example.csv"
+    },
+    content = function(file) {
+      file.copy("data/sample.csv", file)
+    },
+    contentType = "text/csv"
+  )
   
   output$contents <- renderTable({
     
