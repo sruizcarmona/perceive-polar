@@ -25,9 +25,9 @@ readTCX <- function(zipfile, filename, timezone = "", speedunit = "m_per_s", dis
   extensions_ns <- names(which(ns == "http://www.garmin.com/xmlschemas/ActivityExtension/v2")[1])
 
   ## Sport
-  # sport <- xml_attr(xml_find_all(doc, paste0("//", activity_ns, ":", "Activity")), "Sport")
+  sport <- xml_attr(xml_find_all(doc, paste0("//", activity_ns, ":", "Activity")), "Sport")
   # some files report it as "biking"
-  # sport <- ifelse(sport == "Biking", "Cycling", sport)
+  sport <- ifelse(sport == "Biking", "Cycling", sport)
   
   ## Tp
   tp_xpath <- paste0("//", activity_ns, ":", "Trackpoint")
@@ -109,10 +109,10 @@ readTCX <- function(zipfile, filename, timezone = "", speedunit = "m_per_s", dis
 
   # attr(observations, "sport") <- sport
   attr(observations, "device_model_name") <- device_model_name
-  attr(observations, "sport") <- str_extract(filename, "_SPORT_\\w+.TCX") %>% 
+  attr(observations, "sport") <- coalesce(str_extract(filename, "_SPORT_\\w+.TCX") %>% 
     str_remove("_SPORT_") %>% 
     str_remove(".TCX") %>%
-    str_to_sentence()
+    str_to_sentence(), sport)
   
   return(observations)
 }

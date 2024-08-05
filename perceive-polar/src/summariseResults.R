@@ -29,14 +29,16 @@ sum_results <- function(perceive) {
     group_by(id) %>%
     summarise(total_activities=n(), 
               # fix categories once correct sports are taken (resistance vs aerobic maybe?)
-              n_cycling=sum(sport =="Cycling", na.rm = T),
-              n_running=sum(sport =="Running", na.rm = T),
-              n_other=sum(!grepl("Running|Cycling",sport )),
+              n_strength=sum(sport == "Strength_training", na.rm = T),
+              n_cycling=sum(sport == "Cycling", na.rm = T),
+              n_walking=sum(sport == "Walking", na.rm = T),
+              n_running=sum(sport == "Running", na.rm = T),
+              n_other=sum(!grepl("Running|Cycling|Walking|Strength_training",sport )),
               n_heart=sum(!is.na(hr_avg)),
     ) %>% 
     mutate(perc_heart=round(n_heart/total_activities*100,1),
     )
-  
+    
   
   # add error and duplicate count
   for (i in perceive_info$id) {
