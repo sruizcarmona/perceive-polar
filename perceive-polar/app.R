@@ -191,7 +191,7 @@ server <- function(input, output) {
         )
       downloadButton("download", "Download output",
                      icon = icon("download"),
-                     style="color: #fff; background-color: #337ab7; border-color: #2e6da4")
+                     style="color: #fff; background-color: #b71234; border-color: #b71234")
   })
   # download button
   output$download <- downloadHandler(
