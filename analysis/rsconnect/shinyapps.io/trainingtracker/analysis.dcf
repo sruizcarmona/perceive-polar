@@ -1,0 +1,10 @@
+name: analysis
+title:
+username: trainingtracker
+account: trainingtracker
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 12611406
+bundleId: 9063448
+url: https://trainingtracker.shinyapps.io/analysis/
+version: 1
