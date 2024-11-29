@@ -69,6 +69,7 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
                       accept = c(".zip")),
             tags$br(),
             tags$br(),
+            checkboxInput("etrimp_addon", "Add eTRIMPs with 5-min increments", FALSE),
             actionButton("process", "   Process uploaded data",
                          icon = icon("play", class = "fa-fw"),
                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
@@ -147,7 +148,8 @@ server <- function(input, output) {
   observeEvent(input$process, {
       csvinput <- input$csvinput$datapath
       zipfile <- input$zipfile$datapath
-      input <- read.csv(csvinput, header=T, stringsAsFactors = F)
+      etrimp_addon <- input$etrimp_addon
+      input <- read.csv(csvinput, header=T, stringsAsFactors = F) %>% arrange(id)
       totalids <- nrow(input)
       # add progress bar
       withProgress(message = 'Processing participants...', value = 0, {
@@ -170,9 +172,9 @@ server <- function(input, output) {
               if(is.na(file)) {next}
               # print('file')
               incProgress(1/length(myfiles), detail = paste0('File ', which (myfiles == file), '/', length(myfiles)))
-              polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
+              polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr, etrimp_addon = etrimp_addon)
               # print(polar_act)
-              perceive_all$df <- rbind(perceive_all$df, polar_act)
+              perceive_all$df <- plyr::rbind.fill(perceive_all$df, polar_act)
               # perceive_all <- rbind(perceive_all, polar_act)
               # perceive_all <- do.call(rbind, list(perceive_all, polar_act))
             }
@@ -213,7 +215,7 @@ server <- function(input, output) {
                          "errors" = error.sessions
                          )
       openxlsx::write.xlsx(sheet_list,
-                           keepNA = TRUE,
+                           keepNA = FALSE,
                            file = file)
     },
     contentType = "application/xlsx"

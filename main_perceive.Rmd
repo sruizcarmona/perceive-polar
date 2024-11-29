@@ -88,7 +88,7 @@ for (i in 1:nrow(input)) {
       writeLines(paste0("##  ", elapsed, " min\t| (", which (files == file), "/", length(files), ") Working with file: ", file))
     }
     polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
-    perceive_all <- rbind(perceive_all, polar_act)
+    perceive_all <- plyr::rbind.fill(perceive_all, polar_act)
   }
   # save(perceive_all,file='out/perceive_all.rda')
 }
@@ -141,7 +141,7 @@ sheet_list <- list("participants" = perceive_info,
                    "activities" = all.activities,
                    "errors" = error.sessions
                    )
-openxlsx::write.xlsx(sheet_list, keepNA  =TRUE,
+openxlsx::write.xlsx(sheet_list, keepNA = FALSE,
            file=paste0("out/perceive_results_", format(as.Date(Sys.Date()), format = "%y%m%d"),".xlsx"))
 ```
 

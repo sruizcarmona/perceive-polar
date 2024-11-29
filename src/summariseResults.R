@@ -14,7 +14,8 @@ sum_results <- function(perceive) {
     filter(!str_detect(datenum,"error")) %>% 
     mutate(file_id = paste0(id, sapply(str_split(file,"/"),function(x) paste0('/*', str_sub(last(x),-36,-1))))) %>% 
     mutate_if(is.factor, as.character) %>% 
-    select(-file)
+    select(-file) %>% 
+    relocate(file_id, .after = etrimp)
   # clean columns, so they all have the correct type (numbers are not chars)
   all.activities <- type.convert(all.activities, as.is=T)
   # get total time in hr zones
