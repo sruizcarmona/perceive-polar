@@ -72,7 +72,7 @@ get_act_info_from_polar <- function(polar, maxhr, etrimp_addon) {
   ###################
   # get info from heart_rate
   # check that heart_rate is present in polar and its above 10%, otherwise return NA
-  if ("heart_rate" %in% names(hr) & sum(!is.na(hr))/length(hr) > 0.1 & sum(hr != 0, na.rm=T)/length(hr) > 0.1){
+  if ("heart_rate" %in% names(hr) & sum(!is.na(hr))/dim(hr)[1] > 0.1 & sum(hr != 0, na.rm=T)/dim(hr)[1] > 0.1){
     # if (sum(!is.na(hr))/length(hr) > 0.1 & sum(hr != 0, na.rm=T)/length(hr) > 0.1){
     # if, after that, the first 20 values are above 180, clean them too, as they are probably artifacts
     # if(any(hr[1:20] > 180, na.rm = T)){
@@ -115,34 +115,41 @@ get_act_info_from_polar <- function(polar, maxhr, etrimp_addon) {
     if (etrimp_addon == TRUE) {
       p_inc <- polar %>% 
         mutate(inc = as.numeric(difftime(datetime,first(polar$datetime), units="mins")))
-      for (i in seq(5, a$duration_min, by = 5)){
-        ainc <- a %>% select(datenum, maxhr_participant)
-        hrinc <- p_inc %>% select(heart_rate) %>% filter(p_inc$inc <= i)
-        hrinc$heart_rate[hrinc$heart_rate == 0] <- NA
-        rownames(hrinc) <- NULL
-        avgcol <- paste0("hr_avg_",i)
-        maxcol <- paste0("hr_max_",i)
-        etrimpcol <- paste0("etrimp_",i)
-        a[,avgcol] <- round(mean(hrinc$heart_rate,na.rm=T),0)
-        a[,maxcol] <- round(max(hrinc$heart_rate, na.rm=T),0)
-        # get hr_zones and times (standard %s)
-        hrinc$hr_zones <- findInterval(hrinc$heart_rate,hr_zones[6:10])
-        hr_zones_table <- round(table(hrinc$hr_zones)/length(hrinc$hr_zones)*100,2)
-        hr_zones_table[c("0","1","2","3","4","5")[!c("0","1","2","3","4","5") %in% names(hr_zones_table)]] <- 0
-        ainc$hr_z0 <- as.numeric(hr_zones_table['0'])
-        ainc$hr_z1 <- as.numeric(hr_zones_table['1'])
-        ainc$hr_z2 <- as.numeric(hr_zones_table['2'])
-        ainc$hr_z3 <- as.numeric(hr_zones_table['3'])
-        ainc$hr_z4 <- as.numeric(hr_zones_table['4'])
-        ainc$hr_z5 <- as.numeric(hr_zones_table['5'])
-        ainc$hr_z0_time <- as.numeric(round(ainc$hr_z0/100 * i,1))
-        ainc$hr_z1_time <- as.numeric(round(ainc$hr_z1/100 * i,1))
-        ainc$hr_z2_time <- as.numeric(round(ainc$hr_z2/100 * i,1))
-        ainc$hr_z3_time <- as.numeric(round(ainc$hr_z3/100 * i,1))
-        ainc$hr_z4_time <- as.numeric(round(ainc$hr_z4/100 * i,1))
-        ainc$hr_z5_time <- as.numeric(round(ainc$hr_z5/100 * i,1))
-        # calculate trimp scores
-        a[,etrimpcol] <- round(ainc$hr_z1_time * 1 + ainc$hr_z2_time * 2 + ainc$hr_z3_time * 3 + ainc$hr_z4_time * 4 + ainc$hr_z5_time * 5,2)
+      #only run next chunk if there are more than 5 minutes of data
+      if (a$duration_min > 5){
+        for (i in seq(5, a$duration_min, by = 5)){
+          ainc <- a %>% select(datenum, maxhr_participant)
+          hrinc <- p_inc %>% select(heart_rate) %>% filter(p_inc$inc <= i)
+          # some activities have no heart rate data for a few minutes, so we need to skip those increments
+          if(all(is.na(hrinc$heart_rate))){
+            next
+          }
+          hrinc$heart_rate[hrinc$heart_rate == 0] <- NA
+          rownames(hrinc) <- NULL
+          avgcol <- paste0("hr_avg_",i)
+          maxcol <- paste0("hr_max_",i)
+          etrimpcol <- paste0("etrimp_",i)
+          a[,avgcol] <- round(mean(hrinc$heart_rate, na.rm=T),0)
+          a[,maxcol] <- round(max(hrinc$heart_rate, na.rm=T),0)
+          # get hr_zones and times (standard %s)
+          hrinc$hr_zones <- findInterval(hrinc$heart_rate,hr_zones[6:10])
+          hr_zones_table <- round(table(hrinc$hr_zones)/length(hrinc$hr_zones)*100,2)
+          hr_zones_table[c("0","1","2","3","4","5")[!c("0","1","2","3","4","5") %in% names(hr_zones_table)]] <- 0
+          ainc$hr_z0 <- as.numeric(hr_zones_table['0'])
+          ainc$hr_z1 <- as.numeric(hr_zones_table['1'])
+          ainc$hr_z2 <- as.numeric(hr_zones_table['2'])
+          ainc$hr_z3 <- as.numeric(hr_zones_table['3'])
+          ainc$hr_z4 <- as.numeric(hr_zones_table['4'])
+          ainc$hr_z5 <- as.numeric(hr_zones_table['5'])
+          ainc$hr_z0_time <- as.numeric(round(ainc$hr_z0/100 * i,1))
+          ainc$hr_z1_time <- as.numeric(round(ainc$hr_z1/100 * i,1))
+          ainc$hr_z2_time <- as.numeric(round(ainc$hr_z2/100 * i,1))
+          ainc$hr_z3_time <- as.numeric(round(ainc$hr_z3/100 * i,1))
+          ainc$hr_z4_time <- as.numeric(round(ainc$hr_z4/100 * i,1))
+          ainc$hr_z5_time <- as.numeric(round(ainc$hr_z5/100 * i,1))
+          # calculate trimp scores
+          a[,etrimpcol] <- round(ainc$hr_z1_time * 1 + ainc$hr_z2_time * 2 + ainc$hr_z3_time * 3 + ainc$hr_z4_time * 4 + ainc$hr_z5_time * 5,2)
+        }
       }
     }
   } else {
@@ -152,13 +159,16 @@ get_act_info_from_polar <- function(polar, maxhr, etrimp_addon) {
                                           "hr_z0_time", "hr_z1_time","hr_z2_time","hr_z3_time","hr_z4_time","hr_z5_time",
                                           "etrimp")))
     if (etrimp_addon == TRUE) {
-      for (i in seq(5, a$duration_min, by = 5)){
-        avgcol <- paste0("hr_avg_",i)
-        maxcol <- paste0("hr_max_",i)
-        etrimpcol <- paste0("etrimp_",i)
-        a[,avgcol] <- NA
-        a[,maxcol] <- NA
-        a[,etrimpcol] <- NA
+      #only run next chunk if there are more than 5 minutes of data
+      if (a$duration_min > 5){
+        for (i in seq(5, a$duration_min, by = 5)){
+          avgcol <- paste0("hr_avg_",i)
+          maxcol <- paste0("hr_max_",i)
+          etrimpcol <- paste0("etrimp_",i)
+          a[,avgcol] <- NA
+          a[,maxcol] <- NA
+          a[,etrimpcol] <- NA
+        }
       }
     }
   }
