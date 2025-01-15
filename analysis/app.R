@@ -47,7 +47,7 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
              p("This Shiny App is designed to help analyse the Polar sessions for the PERCEIVE study."),
              p("It requires 2 input files, a csv file with the IDs and maximum HR for the selected participants (follow structure from provided example CSV) 
                and a zipped folder with the corresponding TCX files."
-               )
+             )
       )
     ),
     # Sidebar with a slider input for number of bins 
@@ -69,6 +69,7 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
                       accept = c(".zip")),
             tags$br(),
             tags$br(),
+            checkboxInput("etrimp_addon", "Add eTRIMPs with 5-min increments", FALSE),
             actionButton("process", "   Process uploaded data",
                          icon = icon("play", class = "fa-fw"),
                          style="color: #fff; background-color: #337ab7; border-color: #2e6da4"),
@@ -147,6 +148,7 @@ server <- function(input, output) {
   observeEvent(input$process, {
       csvinput <- input$csvinput$datapath
       zipfile <- input$zipfile$datapath
+      etrimp_addon <- input$etrimp_addon
       input <- read.csv(csvinput, header=T, stringsAsFactors = F) %>% arrange(id)
       totalids <- nrow(input)
       # add progress bar
@@ -170,7 +172,7 @@ server <- function(input, output) {
               if(is.na(file)) {next}
               # print('file')
               incProgress(1/length(myfiles), detail = paste0('File ', which (myfiles == file), '/', length(myfiles)))
-              polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr)
+              polar_act <- process_polarfile(filename = file, zipfile = zipfile, id = id, maxhr = maxhr, etrimp_addon = etrimp_addon)
               # print(polar_act)
               perceive_all$df <- plyr::rbind.fill(perceive_all$df, polar_act)
               # perceive_all <- rbind(perceive_all, polar_act)
@@ -213,7 +215,7 @@ server <- function(input, output) {
                          "errors" = error.sessions
                          )
       openxlsx::write.xlsx(sheet_list,
-                           keepNA = TRUE,
+                           keepNA = FALSE,
                            file = file)
     },
     contentType = "application/xlsx"

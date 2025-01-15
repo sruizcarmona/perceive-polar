@@ -45,9 +45,9 @@ ui <- fluidPage(theme = shinytheme("cosmo"),
     fluidRow(
       column(6, offset = 0,
              p("This Shiny App is designed to help analyse the Polar sessions for the PERCEIVE study."),
-             p("It requires 2 input files, a csv file with the IDs and maxHR for the selected participants and
-               a zipped folder with the corresponding TCX files."
-               )
+             p("It requires 2 input files, a csv file with the IDs and maximum HR for the selected participants (follow structure from provided example CSV) 
+               and a zipped folder with the corresponding TCX files."
+             )
       )
     ),
     # Sidebar with a slider input for number of bins 

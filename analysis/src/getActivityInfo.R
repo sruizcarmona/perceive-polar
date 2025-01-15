@@ -5,7 +5,7 @@
 ## input filename and maxHR
 ## output dataframe with hr,power, speed and correlations in columns
 ############################################################################################################
-get_act_info_from_polar <- function(polar, maxhr) {
+get_act_info_from_polar <- function(polar, maxhr, etrimp_addon) {
   ####
   #process
   ####
@@ -58,8 +58,8 @@ get_act_info_from_polar <- function(polar, maxhr) {
                                 "unknown")
   # sport info
   a$sport <- ifelse(!is.null(attributes(polar)$sport),
-                      attributes(polar)$sport,
-                      NA)
+                    attributes(polar)$sport,
+                    NA)
   # heart stuff
   a$maxhr_participant <- maxhr
   ###################
@@ -111,12 +111,62 @@ get_act_info_from_polar <- function(polar, maxhr) {
     a$hr_z5_time <- as.numeric(round(a$hr_z5/100 * a$duration_min,1))
     # calculate trimp scores
     a$etrimp <- round(a$hr_z1_time * 1 + a$hr_z2_time * 2 + a$hr_z3_time * 3 + a$hr_z4_time * 4 + a$hr_z5_time * 5,2)
+    # recalculate hravg, hrmax and etrimp score with 5 min increments starting from 0 ending at 100% of duration
+    if (etrimp_addon == TRUE) {
+      p_inc <- polar %>% 
+        mutate(inc = as.numeric(difftime(datetime,first(polar$datetime), units="mins")))
+      #only run next chunk if there are more than 5 minutes of data
+      if (a$duration_min > 5){
+        for (i in seq(5, a$duration_min, by = 5)){
+          ainc <- a %>% select(datenum, maxhr_participant)
+          hrinc <- p_inc %>% select(heart_rate) %>% filter(p_inc$inc <= i)
+          hrinc$heart_rate[hrinc$heart_rate == 0] <- NA
+          rownames(hrinc) <- NULL
+          avgcol <- paste0("hr_avg_",i)
+          maxcol <- paste0("hr_max_",i)
+          etrimpcol <- paste0("etrimp_",i)
+          a[,avgcol] <- round(mean(hrinc$heart_rate,na.rm=T),0)
+          a[,maxcol] <- round(max(hrinc$heart_rate, na.rm=T),0)
+          # get hr_zones and times (standard %s)
+          hrinc$hr_zones <- findInterval(hrinc$heart_rate,hr_zones[6:10])
+          hr_zones_table <- round(table(hrinc$hr_zones)/length(hrinc$hr_zones)*100,2)
+          hr_zones_table[c("0","1","2","3","4","5")[!c("0","1","2","3","4","5") %in% names(hr_zones_table)]] <- 0
+          ainc$hr_z0 <- as.numeric(hr_zones_table['0'])
+          ainc$hr_z1 <- as.numeric(hr_zones_table['1'])
+          ainc$hr_z2 <- as.numeric(hr_zones_table['2'])
+          ainc$hr_z3 <- as.numeric(hr_zones_table['3'])
+          ainc$hr_z4 <- as.numeric(hr_zones_table['4'])
+          ainc$hr_z5 <- as.numeric(hr_zones_table['5'])
+          ainc$hr_z0_time <- as.numeric(round(ainc$hr_z0/100 * i,1))
+          ainc$hr_z1_time <- as.numeric(round(ainc$hr_z1/100 * i,1))
+          ainc$hr_z2_time <- as.numeric(round(ainc$hr_z2/100 * i,1))
+          ainc$hr_z3_time <- as.numeric(round(ainc$hr_z3/100 * i,1))
+          ainc$hr_z4_time <- as.numeric(round(ainc$hr_z4/100 * i,1))
+          ainc$hr_z5_time <- as.numeric(round(ainc$hr_z5/100 * i,1))
+          # calculate trimp scores
+          a[,etrimpcol] <- round(ainc$hr_z1_time * 1 + ainc$hr_z2_time * 2 + ainc$hr_z3_time * 3 + ainc$hr_z4_time * 4 + ainc$hr_z5_time * 5,2)
+        }
+      }
+    }
   } else {
     # add same columns with NA
     a <- cbind(a, onerow.df(NA,colnames=c("maxhr_activity","maxhr_perc","maxhr_intensity","hr_avg",
                                           "hr_z0","hr_z1", "hr_z2","hr_z3","hr_z4","hr_z5",
                                           "hr_z0_time", "hr_z1_time","hr_z2_time","hr_z3_time","hr_z4_time","hr_z5_time",
                                           "etrimp")))
+    if (etrimp_addon == TRUE) {
+      #only run next chunk if there are more than 5 minutes of data
+      if (a$duration_min > 5){
+        for (i in seq(5, a$duration_min, by = 5)){
+          avgcol <- paste0("hr_avg_",i)
+          maxcol <- paste0("hr_max_",i)
+          etrimpcol <- paste0("etrimp_",i)
+          a[,avgcol] <- NA
+          a[,maxcol] <- NA
+          a[,etrimpcol] <- NA
+        }
+      }
+    }
   }
   return(a)
 }
